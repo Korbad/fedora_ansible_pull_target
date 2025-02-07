@@ -112,7 +112,7 @@
     authorized_key:
       key: http://github.com/{{ github_username }}.keys
       user: "{{ current_user }}"
-    notify: restart_sshd
+    notify: restart sshd
 
   handlers:
   - name: restart systemd-resolved
@@ -123,4 +123,9 @@
   - name: restart systemd-networkd
     systemd:
       name: systemd-networkd
+      state: restarted
+
+  - name: restart sshd
+    systemd:
+      name: sshd
       state: restarted

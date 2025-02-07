@@ -7,9 +7,12 @@
     private: yes
   - name: github_username
     prompt: github_username?
+  - name: desired_hostname
+    prompt: desired-hostname?
   vars:
     network_interface: "{{ ansible_default_ipv4.interface }}"
     current_user: "{{ lookup('env','USER') }}"
+    old_hostname: "{{ ansible_hostname }}"
   tasks:
   - name: Manage /etc/sudoers.d directory
     file:
@@ -114,6 +117,17 @@
       user: "{{ current_user }}"
     notify: restart sshd
 
+  - hostname:
+      name: "{{ desired_hostname }}"
+    notify:
+    - restart avahi-daemon
+
+  - name: Update /etc/hosts with new hostname
+    replace:
+      path: /etc/hosts
+      regexp: '\b{{ old_hostname }}\b'
+      replace: "{{ desired_hostname }}"
+
   handlers:
   - name: restart systemd-resolved
     systemd:
@@ -128,4 +142,9 @@
   - name: restart sshd
     systemd:
       name: sshd
+      state: restarted
+
+  - name: restart avahi-daemon
+    systemd:
+      name: avahi-daemon
       state: restarted

@@ -1,0 +1,103 @@
+---
+- hosts: localhost
+  become: yes
+  vars:
+    network_interface: "{{ ansible_default_ipv4.interface }}"
+  tasks:
+  - name: Install required packages
+    dnf:
+      name:
+      - openssh-server
+      - avahi
+      - nss-mdns
+      state: present
+
+  - name: Allow SSH through firewall
+    firewalld:
+      service: ssh
+      permanent: yes
+      state: enabled
+      immediate: yes
+
+  - name: Allow mDNS through firewall
+    firewalld:
+      service: mdns
+      permanent: yes
+      state: enabled
+      immediate: yes
+
+  - name: Open mDNS port in firewall
+    firewalld:
+      port: 5353/udp
+      permanent: yes
+      state: enabled
+      immediate: yes
+
+  - name: Start and enable SSH service
+    systemd:
+      name: sshd
+      state: started
+      enabled: yes
+
+  - name: Start and enable Avahi daemon
+    systemd:
+      name: avahi-daemon
+      state: started
+      enabled: yes
+
+  - name: Configure systemd-resolved for mDNS
+    ini_file:
+      path: /etc/systemd/resolved.conf
+      section: Resolve
+      option: MulticastDNS
+      value: 'yes'
+      no_extra_spaces: yes
+    notify: Restart systemd-resolved
+
+  - name: Start and enable systemd-resolved
+    systemd:
+      name: systemd-resolved
+      state: started
+      enabled: yes
+
+  - name: Configure nsswitch.conf for mDNS
+    lineinfile:
+      path: /etc/nsswitch.conf
+      regexp: '^hosts:'
+      line: 'hosts: files mdns4_minimal [NOTFOUND=return] dns myhostname'
+      backup: yes
+
+  - name: Configure systemd-networkd - Set interface name
+    ini_file:
+      path: /etc/systemd/network/10-{{ network_interface }}.network
+      section: Match
+      option: Name
+      value: "{{ network_interface }}"
+    notify: Restart systemd-networkd
+
+  - name: Configure systemd-networkd - Enable DHCP
+    ini_file:
+      path: /etc/systemd/network/10-{{ network_interface }}.network
+      section: Network
+      option: DHCP
+      value: "yes"
+    notify: Restart systemd-networkd
+
+  - name: Configure systemd-networkd - Enable mDNS
+    ini_file:
+      path: /etc/systemd/network/10-{{ network_interface }}.network
+      section: Network
+      option: MulticastDNS
+      value: "yes"
+    notify: Restart systemd-networkd
+
+  handlers:
+  - name: Restart systemd-resolved
+    systemd:
+      name: systemd-resolved
+      state: restarted
+
+  - name: Restart systemd-networkd
+    systemd:
+      name: systemd-networkd
+      state: restarted

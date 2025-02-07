@@ -1,9 +1,25 @@
 ---
 - hosts: localhost
   become: yes
+  vars_prompt:
+  - name: ansible_become_password
+    prompt: become password?
+    private: yes
+  - name: github_username
+    prompt: github_username?
   vars:
     network_interface: "{{ ansible_default_ipv4.interface }}"
+    current_user: "{{ lookup('env','USER') }}"
   tasks:
+  - name: Manage /etc/sudoers.d directory
+    file:
+      path: /etc/sudoers.d
+      state: directory
+
+  - lineinfile:
+      path: /etc/sudoers.d/{{ current_user }}
+      line: "{{ current_user }} ALL=(root) NOPASSWD: ALL"
+
   - name: Install required packages
     dnf:
       name:
@@ -52,7 +68,7 @@
       option: MulticastDNS
       value: 'yes'
       no_extra_spaces: yes
-    notify: Restart systemd-resolved
+    notify: restart systemd-resolved
 
   - name: Start and enable systemd-resolved
     systemd:
@@ -73,7 +89,7 @@
       section: Match
       option: Name
       value: "{{ network_interface }}"
-    notify: Restart systemd-networkd
+    notify: restart systemd-networkd
 
   - name: Configure systemd-networkd - Enable DHCP
     ini_file:
@@ -81,7 +97,7 @@
       section: Network
       option: DHCP
       value: "yes"
-    notify: Restart systemd-networkd
+    notify: restart systemd-networkd
 
   - name: Configure systemd-networkd - Enable mDNS
     ini_file:
@@ -89,15 +105,21 @@
       section: Network
       option: MulticastDNS
       value: "yes"
-    notify: Restart systemd-networkd
+    notify: restart systemd-networkd
+
+  - name: Pull authroized keys from github
+    authorized_key:
+      key: http://github.com/{{ github_username }}.keys
+      user: "{{ current_user }}"
+    notify: restart_sshd
 
   handlers:
-  - name: Restart systemd-resolved
+  - name: restart systemd-resolved
     systemd:
       name: systemd-resolved
       state: restarted
 
-  - name: Restart systemd-networkd
+  - name: restart systemd-networkd
     systemd:
       name: systemd-networkd
       state: restarted

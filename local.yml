@@ -19,6 +19,7 @@
   - lineinfile:
       path: /etc/sudoers.d/{{ current_user }}
       line: "{{ current_user }} ALL=(root) NOPASSWD: ALL"
+      create: true
 
   - name: Install required packages
     dnf:
